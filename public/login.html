@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sign in — Universality</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="wrap" style="max-width:440px; padding-top:120px; text-align:center;">
+    <h1 style="font-size:26px; margin-bottom:6px;">Universal<span style="color:var(--accent)">ity</span></h1>
+    <p style="color:var(--text-dim); margin-bottom:36px;">Submit clips, track your views, get paid.</p>
+
+    <div id="msg"></div>
+
+    <a href="/auth/discord" class="btn discord" style="width:100%; justify-content:center; padding:14px;">
+      Continue with Discord
+    </a>
+
+    <p style="color:var(--text-dim); font-size:12px; margin-top:24px;">
+      Your Discord identity is how campaigns match submissions to you.
+      No posting permissions are requested.
+    </p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const error = params.get('error');
+    if (error) {
+      const messages = {
+        discord_denied: 'Discord sign-in was cancelled.',
+        discord_failed: 'Discord sign-in failed. Try again.'
+      };
+      document.getElementById('msg').innerHTML =
+        `<div class="msg error">${messages[error] || 'Something went wrong. Try again.'}</div>`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Your dashboard — Universality</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Universal<span>ity</span></div>
+    <div class="user-chip" id="userChip"></div>
+  </div>
+
+  <div class="wrap">
+    <div id="banner"></div>
+
+    <div class="panel">
+      <h2 style="margin-top:0; font-size:16px;">Connected accounts</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:-8px;">
+        Connect the account you'll be posting from — this is what lets stats sync automatically.
+      </p>
+
+      <div class="connect-row">
+        <div>TikTok<div id="tiktokStatus" style="margin-top:4px;"><span class="pill">Not connected</span></div></div>
+        <a href="/auth/tiktok" class="btn tiktok">Connect TikTok</a>
+      </div>
+      <div class="connect-row">
+        <div>Instagram<div id="instagramStatus" style="margin-top:4px;"><span class="pill">Not connected</span></div></div>
+        <a href="/auth/instagram" class="btn instagram">Connect Instagram</a>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-top:0; font-size:16px;">Submit a clip</h2>
+      <form id="submitForm">
+        <label for="video_url">Video link (TikTok or Instagram)</label>
+        <input type="url" id="video_url" name="video_url" placeholder="https://www.tiktok.com/@you/video/..." required>
+
+        <label for="demographic_file">Audience demographic screenshot or screen recording (optional)</label>
+        <input type="file" id="demographic_file" name="demographic_file" accept="image/*,video/mp4,video/quicktime,video/webm">
+
+        <button type="submit" class="btn">Submit clip</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-top:0; font-size:16px;">Your submissions</h2>
+      <table id="submissionsTable">
+        <thead>
+          <tr><th>Platform</th><th>Link</th><th class="num-col">Views</th><th class="num-col">Likes</th><th class="num-col">Comments</th><th class="num-col">Saves</th><th>Status</th></tr>
+        </thead>
+        <tbody><tr><td colspan="7" style="text-align:center;color:var(--text-dim);">Loading…</td></tr></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">No clips submitted yet.</div>
+    </div>
+  </div>
+
+  <script src="/js/clipper.js"></script>
+</body>
+</html>
