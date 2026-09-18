@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
 const { nanoid } = require('nanoid');
 const db = require('../db');
@@ -7,9 +8,12 @@ const { requireClipper, requireOpsAdmin, isOpsAdmin } = require('../middleware/a
 
 const router = express.Router();
 
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
 const upload = multer({
   storage: multer.diskStorage({
-    destination: path.join(__dirname, '..', 'uploads'),
+    destination: uploadsDir,
     filename: (req, file, cb) => cb(null, `${nanoid()}${path.extname(file.originalname)}`)
   }),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB, covers screen recordings
