@@ -1,80 +1,101 @@
 const axios = require('axios');
 
-const GRAPH = 'https://graph.facebook.com/v19.0';
+// Instagram API with Instagram Login: clippers sign in with Instagram directly
+// (no Facebook Page needed), but the account must be a Business or Creator account.
+const GRAPH = 'https://graph.instagram.com/v22.0';
 
-// Login flow goes through Facebook Login, then we find the Instagram
-// Business/Creator account linked to the Page the clipper manages.
-// This is a Meta requirement: personal Instagram accounts cannot be
-// connected via the Graph API at all.
 function getAuthorizeUrl(state) {
   const params = new URLSearchParams({
-    client_id: process.env.META_APP_ID,
+    client_id: process.env.INSTAGRAM_APP_ID,
     redirect_uri: process.env.INSTAGRAM_REDIRECT_URI,
-    scope: 'instagram_basic,instagram_manage_insights,pages_show_list',
     response_type: 'code',
+    scope: 'instagram_business_basic,instagram_business_manage_insights',
     state
   });
-  return `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+  return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
 }
 
+// Trades the auth code for a short-lived token, then upgrades it to a ~60 day token.
 async function exchangeCodeForToken(code) {
-  const res = await axios.get(`${GRAPH}/oauth/access_token`, {
+  const body = new URLSearchParams({
+    client_id: process.env.INSTAGRAM_APP_ID,
+    client_secret: process.env.INSTAGRAM_APP_SECRET,
+    grant_type: 'authorization_code',
+    redirect_uri: process.env.INSTAGRAM_REDIRECT_URI,
+    code
+  });
+  const short = await axios.post('https://api.instagram.com/oauth/access_token', body.toString(), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  const shortData = Array.isArray(short.data?.data) ? short.data.data[0] : short.data;
+
+  const long = await axios.get('https://graph.instagram.com/access_token', {
     params: {
-      client_id: process.env.META_APP_ID,
-      client_secret: process.env.META_APP_SECRET,
-      redirect_uri: process.env.INSTAGRAM_REDIRECT_URI,
-      code
+      grant_type: 'ig_exchange_token',
+      client_secret: process.env.INSTAGRAM_APP_SECRET,
+      access_token: shortData.access_token
     }
   });
-  return res.data; // { access_token, expires_in }
+  return { accessToken: long.data.access_token, expiresIn: long.data.expires_in };
 }
 
-// Walks Pages -> connected Instagram Business Account for this user.
-async function getInstagramAccount(userAccessToken) {
-  const pagesRes = await axios.get(`${GRAPH}/me/accounts`, {
-    params: { access_token: userAccessToken }
+async function getProfile(accessToken) {
+  const res = await axios.get(`${GRAPH}/me`, {
+    params: { fields: 'user_id,username,account_type', access_token: accessToken }
   });
-  for (const page of pagesRes.data.data || []) {
-    const igRes = await axios.get(`${GRAPH}/${page.id}`, {
-      params: { fields: 'instagram_business_account', access_token: userAccessToken }
-    });
-    if (igRes.data.instagram_business_account) {
-      return {
-        instagramUserId: igRes.data.instagram_business_account.id,
-        pageAccessToken: page.access_token
-      };
-    }
+  return {
+    userId: String(res.data.user_id || res.data.id),
+    username: res.data.username,
+    accountType: res.data.account_type
+  };
+}
+
+async function refreshToken(accessToken) {
+  const res = await axios.get('https://graph.instagram.com/refresh_access_token', {
+    params: { grant_type: 'ig_refresh_token', access_token: accessToken }
+  });
+  return { accessToken: res.data.access_token, expiresIn: res.data.expires_in };
+}
+
+function shortcodeFromUrl(url) {
+  const m = String(url).match(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+async function getInsights(mediaId, accessToken) {
+  const metrics = {};
+  const res = await axios.get(`${GRAPH}/${mediaId}/insights`, {
+    params: { metric: 'views,saved,shares', access_token: accessToken }
+  });
+  for (const item of res.data.data || []) {
+    metrics[item.name] = item.values?.[0]?.value ?? item.total_value?.value ?? 0;
   }
-  return null; // no Business/Creator IG account linked to any page they manage
+  return metrics;
 }
 
-async function getUsername(instagramUserId, accessToken) {
-  const res = await axios.get(`${GRAPH}/${instagramUserId}`, {
-    params: { fields: 'username', access_token: accessToken }
-  });
-  return res.data.username;
-}
+// Finds a submitted post among the connected account's recent media (by URL
+// shortcode) and returns its stats.
+async function findMediaStats(accessToken, videoUrl) {
+  const shortcode = shortcodeFromUrl(videoUrl);
+  if (!shortcode) return null;
 
-// Finds a submitted Reel/post's insights by matching permalink, then
-// pulls views/likes/comments/saves from the Insights edge.
-async function findMediaStats(instagramUserId, accessToken, videoUrl) {
-  const mediaRes = await axios.get(`${GRAPH}/${instagramUserId}/media`, {
-    params: { fields: 'id,permalink,like_count,comments_count', access_token: accessToken, limit: 50 }
-  });
-  const match = (mediaRes.data.data || []).find(m => videoUrl.includes(m.id) || videoUrl.startsWith(m.permalink));
+  let url = `${GRAPH}/me/media`;
+  let params = { fields: 'id,permalink,like_count,comments_count', limit: 50, access_token: accessToken };
+  let match = null;
+
+  for (let page = 0; page < 5 && !match; page++) {
+    const res = await axios.get(url, { params });
+    match = (res.data.data || []).find(m => shortcodeFromUrl(m.permalink) === shortcode);
+    if (!res.data.paging?.next) break;
+    url = res.data.paging.next;
+    params = undefined;
+  }
   if (!match) return null;
 
-  const insightsRes = await axios.get(`${GRAPH}/${match.id}/insights`, {
-    params: { metric: 'plays,saved,shares', access_token: accessToken }
-  });
-  const metrics = {};
-  for (const item of insightsRes.data.data || []) {
-    metrics[item.name] = item.values?.[0]?.value ?? 0;
-  }
-
+  const metrics = await getInsights(match.id, accessToken);
   return {
     id: match.id,
-    views: metrics.plays || 0,
+    views: metrics.views || 0,
     likes: match.like_count || 0,
     comments: match.comments_count || 0,
     saves: metrics.saved || 0,
@@ -82,4 +103,4 @@ async function findMediaStats(instagramUserId, accessToken, videoUrl) {
   };
 }
 
-module.exports = { getAuthorizeUrl, exchangeCodeForToken, getInstagramAccount, getUsername, findMediaStats };
+module.exports = { getAuthorizeUrl, exchangeCodeForToken, getProfile, refreshToken, shortcodeFromUrl, findMediaStats };

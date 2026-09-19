@@ -30,8 +30,20 @@ async function syncTikTok(clipper, submission) {
     stats.id, Date.now(), submission.id);
 }
 
+const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
 async function syncInstagram(clipper, submission) {
-  const stats = await instagram.findMediaStats(clipper.instagram_user_id, clipper.instagram_access_token, submission.video_url);
+  let accessToken = clipper.instagram_access_token;
+
+  // Instagram tokens last ~60 days; refresh once they're within a week of expiring.
+  if (clipper.instagram_token_expires_at - Date.now() < SEVEN_DAYS) {
+    const refreshed = await instagram.refreshToken(accessToken);
+    accessToken = refreshed.accessToken;
+    db.prepare(`UPDATE clippers SET instagram_access_token = ?, instagram_token_expires_at = ? WHERE id = ?`)
+      .run(accessToken, Date.now() + refreshed.expiresIn * 1000, clipper.id);
+  }
+
+  const stats = await instagram.findMediaStats(accessToken, submission.video_url);
   if (!stats) throw new Error('Media not found on connected Instagram account');
 
   db.prepare(`

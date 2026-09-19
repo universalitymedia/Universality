@@ -33,11 +33,11 @@ Visit `http://localhost:3000`.
 5. **Important:** TikTok requires app review before real (non-sandbox) users can grant `video.list`. This typically takes several business days. You can test the full flow immediately with TikTok's sandbox test accounts while waiting on approval.
 
 ### Instagram (for automatic Instagram stats)
-1. https://developers.facebook.com/apps → create a **Business** app
-2. Add product **Instagram Graph API**
-3. Add redirect URI: `http://localhost:3000/auth/instagram/callback`
-4. **Hard requirement from Meta, not from this app:** each clipper's Instagram must be a **Business or Creator account** linked to a Facebook Page they manage. Personal accounts cannot be connected via this API at all — if a clipper only has a personal account, they'll need to switch (Instagram app → Settings → Account type → switch to Professional).
-5. Meta also requires App Review for `instagram_manage_insights` before it works for real users outside your test list.
+1. https://developers.facebook.com/apps → create an app with the use case **Manage messaging & content on Instagram**
+2. Use case → **API setup with Instagram login**: copy the *Instagram* app ID and *Instagram* app secret into `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` (these differ from the main app ID/secret)
+3. Add redirect URI `http://localhost:3000/auth/instagram/callback` under Business login settings
+4. **Hard requirement from Meta, not from this app:** each clipper's Instagram must be a **Business or Creator account**. No Facebook Page is needed. Personal accounts cannot be connected via this API — if a clipper only has a personal account, they'll need to switch (Instagram app → Settings → Account type → switch to Professional).
+5. Meta also requires App Review for `instagram_business_manage_insights` before it works for real users outside your test list. Until then, add people under App roles → Instagram Tester.
 
 ## 3. What "automatic" actually covers
 

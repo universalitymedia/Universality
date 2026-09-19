@@ -84,31 +84,36 @@ router.get('/tiktok/callback', requireClipper, async (req, res) => {
 // ---- Instagram account connect ----
 
 router.get('/instagram', requireClipper, (req, res) => {
-  res.redirect(instagram.getAuthorizeUrl(req.session.clipperId));
+  const state = nanoid();
+  req.session.instagramState = state;
+  res.redirect(instagram.getAuthorizeUrl(state));
 });
 
 router.get('/instagram/callback', requireClipper, async (req, res) => {
   try {
-    const { code } = req.query;
-    const token = await instagram.exchangeCodeForToken(code);
-    const account = await instagram.getInstagramAccount(token.access_token);
+    const { code, state, error } = req.query;
+    const expectedState = req.session.instagramState;
+    delete req.session.instagramState;
 
-    if (!account) {
-      // Most common failure: the clipper's Instagram is a personal account,
-      // or isn't linked to a Facebook Page they manage.
+    if (error || !code) return res.redirect('/clipper.html?error=instagram_failed');
+    if (!state || state !== expectedState) return res.redirect('/clipper.html?error=instagram_failed');
+
+    const token = await instagram.exchangeCodeForToken(String(code));
+    const profile = await instagram.getProfile(token.accessToken);
+
+    // Personal accounts can't use this API; only Business/Creator accounts can be connected.
+    if (profile.accountType && !['BUSINESS', 'MEDIA_CREATOR', 'CREATOR'].includes(profile.accountType)) {
       return res.redirect('/clipper.html?error=instagram_no_business_account');
     }
-
-    const username = await instagram.getUsername(account.instagramUserId, account.pageAccessToken);
 
     db.prepare(`
       UPDATE clippers SET instagram_user_id = ?, instagram_username = ?, instagram_access_token = ?,
         instagram_token_expires_at = ? WHERE id = ?
     `).run(
-      account.instagramUserId,
-      username,
-      account.pageAccessToken,
-      Date.now() + (60 * 24 * 60 * 60 * 1000), // long-lived page tokens ~60 days
+      profile.userId,
+      profile.username,
+      token.accessToken,
+      Date.now() + (token.expiresIn * 1000),
       req.session.clipperId
     );
     res.redirect('/clipper.html?connected=instagram');
