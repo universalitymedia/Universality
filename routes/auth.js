@@ -118,6 +118,9 @@ router.get('/instagram/callback', requireClipper, async (req, res) => {
     );
     res.redirect('/clipper.html?connected=instagram');
   } catch (err) {
+    if (err.code === 'MISSING_INSIGHTS') {
+      return res.redirect('/clipper.html?error=instagram_missing_insights');
+    }
     console.error('Instagram callback error:', err.response?.data || err.message);
     res.redirect('/clipper.html?error=instagram_failed');
   }

@@ -91,6 +91,8 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
     banner.innerHTML = `<div class="msg success">${params.get('connected')} connected.</div>`;
   } else if (params.get('error') === 'instagram_no_business_account') {
     banner.innerHTML = `<div class="msg error">Your Instagram needs to be a Business or Creator account before it can be connected. Switch account type in Instagram settings (Account type and tools), then try again.</div>`;
+  } else if (params.get('error') === 'instagram_missing_insights') {
+    banner.innerHTML = `<div class="msg error">Instagram wasn't connected because "Access and manage insights" was turned off. Click Connect Instagram again and make sure that permission is checked. We need it to count your views.</div>`;
   } else if (params.get('error')) {
     banner.innerHTML = `<div class="msg error">Connection failed. Try again.</div>`;
   }

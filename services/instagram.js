@@ -15,7 +15,17 @@ function getAuthorizeUrl(state) {
   return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
 }
 
+const INSIGHTS_SCOPE = 'instagram_business_manage_insights';
+
+function grantedPermissions(shortData) {
+  const p = shortData.permissions;
+  if (p === undefined || p === null) return null;
+  return (Array.isArray(p) ? p : String(p).split(/[,\s]+/)).filter(Boolean);
+}
+
 // Trades the auth code for a short-lived token, then upgrades it to a ~60 day token.
+// Throws err.code === 'MISSING_INSIGHTS' if the person unticked the insights permission
+// on Instagram's consent screen (Instagram lets them opt out of it).
 async function exchangeCodeForToken(code) {
   const body = new URLSearchParams({
     client_id: process.env.INSTAGRAM_APP_ID,
@@ -28,6 +38,13 @@ async function exchangeCodeForToken(code) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
   });
   const shortData = Array.isArray(short.data?.data) ? short.data.data[0] : short.data;
+
+  const granted = grantedPermissions(shortData);
+  if (granted && !granted.includes(INSIGHTS_SCOPE)) {
+    const err = new Error('Instagram insights permission was not granted');
+    err.code = 'MISSING_INSIGHTS';
+    throw err;
+  }
 
   const long = await axios.get('https://graph.instagram.com/access_token', {
     params: {
@@ -64,9 +81,19 @@ function shortcodeFromUrl(url) {
 
 async function getInsights(mediaId, accessToken) {
   const metrics = {};
-  const res = await axios.get(`${GRAPH}/${mediaId}/insights`, {
-    params: { metric: 'views,saved,shares', access_token: accessToken }
-  });
+  let res;
+  try {
+    res = await axios.get(`${GRAPH}/${mediaId}/insights`, {
+      params: { metric: 'views,saved,shares', access_token: accessToken }
+    });
+  } catch (err) {
+    // Code 10 / 200 = the token lacks the insights permission.
+    const code = err.response?.data?.error?.code;
+    if (code === 10 || code === 200) {
+      throw new Error("Instagram insights permission missing - reconnect Instagram and leave 'Access and manage insights' on");
+    }
+    throw err;
+  }
   for (const item of res.data.data || []) {
     metrics[item.name] = item.values?.[0]?.value ?? item.total_value?.value ?? 0;
   }
